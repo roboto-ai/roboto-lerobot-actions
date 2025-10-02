@@ -1,17 +1,20 @@
 # Enrich LeRobot Dataset With Derived Data
 
-An example of how to enrich a LeRobot dataset with derived data. 
+An example of how to enrich a LeRobot dataset with derived data.
 
 This action creates a new LeRobot dataset with all original features plus an additional `action_observation_difference` feature that contains the element-wise difference between the `action` and `observation.state` state vectors for each frame.
 
 The output is a new dataset in Roboto that contains the enriched LeRobot dataset.
 
-## Getting started
+## Local usage
 
-1. Setup a virtual environment specific to this project and install development dependencies, including the `roboto` SDK: `./scripts/setup.sh`
-2. Build Docker image: `./scripts/build.sh`
-3. Run Action image locally: `./scripts/run.sh <path-to-input-data-directory>`
-4. Deploy to Roboto Platform: `./scripts/deploy.sh`
+1. `./scripts/setup.sh`: setup a virtual environment specific to this project and install dependencies, including the `roboto` SDK
+2. `./scripts/run.sh <local-path-to-lerobot-dataset>`: see `--help` for usage.
+
+## Deployment to Roboto
+
+1. `./scripts/build.sh`: build as Docker image
+2. `./scripts/deploy.sh`: deploy to Roboto Platform
 
 ## Action configuration file
 
