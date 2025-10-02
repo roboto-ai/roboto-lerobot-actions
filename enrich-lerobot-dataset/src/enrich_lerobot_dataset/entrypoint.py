@@ -23,6 +23,8 @@ class Args(argparse.Namespace):
 
 
 def main(args: Args):
+    log.setLevel(args.log_level)
+
     source_lerobot_ds = load_from_directory(args.lerobot_source_dataset_path)
     source_features = source_lerobot_ds.meta.features
     action_feature = source_features["action"]
@@ -185,7 +187,5 @@ if __name__ == "__main__":
         ),
     )
     args = parser.parse_args(namespace=Args())
-
-    log.setLevel(args.log_level)
 
     main(args)

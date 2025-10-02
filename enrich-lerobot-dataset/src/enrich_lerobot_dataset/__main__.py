@@ -4,6 +4,7 @@ Requires a number of environment variables to be set,
 which are done automatically by Roboto when run on hosted compute.
 """
 
+import logging
 import pathlib
 import tempfile
 
@@ -22,9 +23,10 @@ def get_optional_parameter(name: str) -> str | None:
 
 with tempfile.TemporaryDirectory() as tmpdir:
     args = Args(
-        # Action Parameters are defined in `action.json`
+        # Action parameters are defined in `action.json`
         episode_limit=get_optional_parameter("EPISODE_LIMIT"),
         lerobot_source_dataset_path=action_runtime.input_dir,
+        log_level=logging.INFO,
         output_dir=pathlib.Path(tmpdir),
         roboto_source_dataset_id=action_runtime.dataset_id,
         roboto_org_id=action_runtime.org_id,
