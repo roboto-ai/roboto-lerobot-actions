@@ -1,0 +1,10 @@
+[project]
+name = "roboto-lerobot-integration"
+version = "0.1.0"
+description = "Create a LeRobot dataset from Roboto data"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "lerobot>=0.3.3",
+    "roboto>=0.27.0",
+]
