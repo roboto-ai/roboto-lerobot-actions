@@ -3,7 +3,6 @@ ARG PYTHON_MINOR=12
 ARG OS_VARIANT=slim-bookworm
 FROM --platform=linux/amd64 public.ecr.aws/docker/library/python:${PYTHON_MAJOR}.${PYTHON_MINOR}-${OS_VARIANT}
 
-COPY requirements.runtime.txt ./
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         cmake \
@@ -19,6 +18,8 @@ RUN apt-get update && \
         libswresample-dev \
         libavfilter-dev && \
     rm -rf /var/lib/apt/lists/*
+
+COPY requirements.runtime.txt ./
 RUN python -m pip install --upgrade pip setuptools && python -m pip install -r requirements.runtime.txt
 
 COPY src/enrich_lerobot_dataset/ ./enrich_lerobot_dataset
