@@ -11,6 +11,9 @@ if [ ! -f "$PACKAGE_ROOT/.venv/bin/roboto" ]; then
     exit 1
 fi
 
+echo "Building container image"
+$SCRIPTS_ROOT/build.sh --quiet
+
 # Set org_id to $ROBOTO_ORG_ID if defined, else the first argument passed to this script
 org_id=${ROBOTO_ORG_ID:-}
 if [ $# -gt 0 ]; then
@@ -38,7 +41,7 @@ if [ $image_push_ret_code -ne 0 ]; then
     exit 1
 fi
 
-echo "Creating enrich_lerobot_dataset action"
+echo "Creating/updating enrich_lerobot_dataset action"
 create_args=(
   --from-file $PACKAGE_ROOT/action.json
   --image $image_uri

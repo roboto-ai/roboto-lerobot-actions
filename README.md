@@ -1,29 +1,24 @@
 # Roboto LeRobot Actions
 
-This repository contains Roboto Actions and example code demonstrating the interoperability between [LeRobot datasets](https://huggingface.co/docs/lerobot/lerobot-dataset-v3) and the [Roboto](https://www.roboto.ai/) platform.
+This repository contains example Roboto Actions demonstrating the interoperability between [LeRobot datasets](https://huggingface.co/docs/lerobot/lerobot-dataset-v3) and the [Roboto](https://www.roboto.ai/) platform.
 
 ## Overview
 
-LeRobot is an open-source framework for robotics machine learning that defines its own dataset format. This repository showcases how to integrate LeRobot datasets with Roboto's data management and processing platform through custom Actions.
+LeRobot is an open-source framework for robotics machine learning that defines its own dataset format. This repository provides **example implementations** showing how you can integrate LeRobot datasets with Roboto's data management and processing platform through custom Actions. These examples demonstrate patterns for loading, processing, and enriching LeRobot datasets stored in Roboto using the Actions Platform.
 
 ## Actions
 
 ### Enrich LeRobot Dataset With Derived Data
 
-An example Roboto Action that demonstrates how to:
+**An example Roboto Action** that demonstrates one approach to adding features to LeRobot datasets stored in Roboto. This example shows how to:
 - Load LeRobot datasets from Roboto storage
-- Process and enrich dataset features with derived data
-- Create new Roboto datasets with the enriched results
+- Process and compute derived features from existing dataset data
+- Use LeRobot's native `add_features` API to create enriched datasets
+- Upload the enriched results back to Roboto as new datasets
 
-This action adds an `action_observation_difference` feature to LeRobot datasets, computing the element-wise difference between action and observation state vectors for each frame.
+In this specific example, the action adds an `action_observation_difference` feature to LeRobot datasets by computing the element-wise difference between action and observation state vectors for each frame. This pattern can be adapted to add any custom features or transformations to your LeRobot datasets.
 
 See the [action-specific README](./enrich-lerobot-dataset/README.md) for detailed setup and usage instructions.
-
-## Prerequisites
-
-- [Docker](https://docs.docker.com/get-docker/) for building and running action images
-- [Roboto CLI](https://github.com/roboto-ai/roboto-python-sdk/tree/main?tab=readme-ov-file#install-roboto) for deploying actions to the Roboto platform
-- Python 3.10 or higher
 
 ## Resources
 

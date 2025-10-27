@@ -1,16 +1,10 @@
 {
     "name": "enrich-lerobot-dataset",
-    "description": "Enrich a LeRobot dataset with derived data.",
+    "description": "An example of how to enrich a LeRobot dataset with derived data.",
     "compute_requirements": {
         "vCPU": 4096,
         "memory": 8192,
         "storage": 200
     },
-    "parameters": [
-        {
-            "name": "EPISODE_LIMIT",
-            "required": false,
-            "description": "Limit the number of episodes to process."
-        }
-    ]
+    "requires_downloaded_inputs": true
 }
