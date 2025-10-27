@@ -1,0 +1,10 @@
+{
+    "name": "mcap-to-lerobot",
+    "description": "Convert MCAP file(s) to a LeRobot Dataset",
+    "compute_requirements": {
+        "vCPU": 512,
+        "memory": 1024,
+        "storage": 21
+    },
+    "parameters": []
+}
