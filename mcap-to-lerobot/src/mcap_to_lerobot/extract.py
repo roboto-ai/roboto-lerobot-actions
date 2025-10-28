@@ -278,6 +278,18 @@ def build_camera_data_index(
     upward_heights = upward_merged["height"].dropna().unique()
     upward_widths = upward_merged["width"].dropna().unique()
 
+    # Check if we have any camera info data
+    if len(downward_heights) == 0 or len(downward_widths) == 0:
+        raise ValueError(
+            "No CameraInfo messages found for downward camera. "
+            "Cannot determine image dimensions."
+        )
+    if len(upward_heights) == 0 or len(upward_widths) == 0:
+        raise ValueError(
+            "No CameraInfo messages found for upward camera. "
+            "Cannot determine image dimensions."
+        )
+
     if len(downward_heights) > 1 or len(downward_widths) > 1:
         logger.warning(
             "Inconsistent downward camera dimensions: heights=%r, widths=%r",
@@ -292,11 +304,11 @@ def build_camera_data_index(
             upward_widths,
         )
 
-    # Get final dimensions
-    downward_height = int(downward_merged["height"][0])
-    downward_width = int(downward_merged["width"][0])
-    upward_height = int(upward_merged["height"][0])
-    upward_width = int(upward_merged["width"][0])
+    # Get final dimensions from the unique arrays
+    downward_height = int(downward_heights[0])
+    downward_width = int(downward_widths[0])
+    upward_height = int(upward_heights[0])
+    upward_width = int(upward_widths[0])
 
     return CameraData(
         camera_info=CameraInfoData(
