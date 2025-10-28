@@ -172,11 +172,9 @@ def extract_trajectories(trajectory_df: pd.DataFrame) -> Trajectories:
 def build_camera_data_index(
     downward_camera_df: pd.DataFrame,
     upward_camera_df: pd.DataFrame,
-    downward_info_df: pd.DataFrame,
-    upward_info_df: pd.DataFrame,
 ) -> CameraData:
     """
-    Build camera data index by merging image data with CameraInfo.
+    Build camera data index and detect image dimensions from first image of each camera.
     """
     logger.info("Building camera data index")
 
@@ -218,106 +216,55 @@ def build_camera_data_index(
 
     upward_df = pd.DataFrame(upward_data)
 
-    # Downward camera info
-    downward_info_timestamps = []
-    downward_info_data = []
+    # Detect dimensions from first image of each camera
+    if len(downward_df) == 0:
+        raise ValueError("No downward camera images found")
+    if len(upward_df) == 0:
+        raise ValueError("No upward camera images found")
 
-    for _, row in downward_info_df.iterrows():
-        timestamp_ns = ros_time_to_nanoseconds(
-            row["header.stamp.sec"], row["header.stamp.nsec"]
-        )
-        downward_info_timestamps.append(timestamp_ns)
-        downward_info_data.append(
-            {
-                "timestamp": timestamp_ns,
-                "height": int(row["height"]),
-                "width": int(row["width"]),
-            }
-        )
+    logger.info("Detecting image dimensions from first frame of each camera")
 
-    downward_info_parsed = pd.DataFrame(downward_info_data)
-
-    # Upward camera info
-    upward_info_timestamps = []
-    upward_info_data = []
-
-    for _, row in upward_info_df.iterrows():
-        timestamp_ns = ros_time_to_nanoseconds(
-            row["header.stamp.sec"], row["header.stamp.nsec"]
-        )
-        upward_info_timestamps.append(timestamp_ns)
-        upward_info_data.append(
-            {
-                "timestamp": timestamp_ns,
-                "height": int(row["height"]),
-                "width": int(row["width"]),
-            }
-        )
-
-    upward_info_parsed = pd.DataFrame(upward_info_data)
-
-    # Merge camera info with images
-    downward_merged = pd.merge_asof(
-        downward_df.sort_values("timestamp"),
-        downward_info_parsed.sort_values("timestamp"),
-        on="timestamp",
-        direction="backward",
-        suffixes=("", "_info"),
+    first_downward = downward_df.iloc[0]
+    downward_height, downward_width = get_image_dimensions(
+        first_downward["data"], first_downward["format"]
     )
+    logger.info("Downward camera dimensions: %dx%d", downward_height, downward_width)
 
-    upward_merged = pd.merge_asof(
-        upward_df.sort_values("timestamp"),
-        upward_info_parsed.sort_values("timestamp"),
-        on="timestamp",
-        direction="backward",
-        suffixes=("", "_info"),
+    first_upward = upward_df.iloc[0]
+    upward_height, upward_width = get_image_dimensions(
+        first_upward["data"], first_upward["format"]
     )
-
-    downward_heights = downward_merged["height"].dropna().unique()
-    downward_widths = downward_merged["width"].dropna().unique()
-    upward_heights = upward_merged["height"].dropna().unique()
-    upward_widths = upward_merged["width"].dropna().unique()
-
-    # Check if we have any camera info data
-    if len(downward_heights) == 0 or len(downward_widths) == 0:
-        raise ValueError(
-            "No CameraInfo messages found for downward camera. "
-            "Cannot determine image dimensions."
-        )
-    if len(upward_heights) == 0 or len(upward_widths) == 0:
-        raise ValueError(
-            "No CameraInfo messages found for upward camera. "
-            "Cannot determine image dimensions."
-        )
-
-    if len(downward_heights) > 1 or len(downward_widths) > 1:
-        logger.warning(
-            "Inconsistent downward camera dimensions: heights=%r, widths=%r",
-            downward_heights,
-            downward_widths,
-        )
-
-    if len(upward_heights) > 1 or len(upward_widths) > 1:
-        logger.warning(
-            "Inconsistent upward camera dimensions: heights=%r, widths=%r",
-            upward_heights,
-            upward_widths,
-        )
-
-    # Get final dimensions from the unique arrays
-    downward_height = int(downward_heights[0])
-    downward_width = int(downward_widths[0])
-    upward_height = int(upward_heights[0])
-    upward_width = int(upward_widths[0])
+    logger.info("Upward camera dimensions: %dx%d", upward_height, upward_width)
 
     return CameraData(
         camera_info=CameraInfoData(
             downward=CameraInfoDimensions(height=downward_height, width=downward_width),
             upward=CameraInfoDimensions(height=upward_height, width=upward_width),
         ),
-        downward=downward_merged,
-        upward=upward_merged,
+        downward=downward_df,
+        upward=upward_df,
     )
+
+
+def get_image_dimensions(compressed_data: bytes, format_str: str) -> tuple[int, int]:
+    """
+    Get image dimensions without full decompression.
+
+    Args:
+        compressed_data: Compressed image bytes from ROS CompressedImage message
+        format_str: Format string from CompressedImage message (e.g., "jpeg", "png")
+
+    Returns:
+        Tuple of (height, width) in pixels
+    """
+    img_array = np.frombuffer(compressed_data, dtype=np.uint8)
+    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+    if img is None:
+        raise ValueError("Failed to decode image with format: %s" % format_str)
+
+    height, width = img.shape[:2]
+    return (height, width)
 
 
 def decompress_image(compressed_data: bytes, format_str: str) -> np.ndarray:

@@ -28,7 +28,7 @@ class Trajectories(typing.NamedTuple):
 
 
 class CameraInfoDimensions(typing.NamedTuple):
-    """Camera dimensions."""
+    """Camera dimensions detected from image data."""
 
     height: int
     """Image height in pixels"""
@@ -37,7 +37,7 @@ class CameraInfoDimensions(typing.NamedTuple):
 
 
 class CameraInfoData(typing.NamedTuple):
-    """Camera information for both cameras."""
+    """Camera dimensions for both cameras."""
 
     downward: CameraInfoDimensions
     """Dimensions for downward-facing camera"""
@@ -46,14 +46,14 @@ class CameraInfoData(typing.NamedTuple):
 
 
 class CameraData(typing.NamedTuple):
-    """Camera data index with merged image and info data."""
+    """Camera data index with image data and detected dimensions."""
 
     camera_info: CameraInfoData
-    """Camera dimensions for both cameras"""
+    """Camera dimensions for both cameras (detected from first image)"""
     downward: pd.DataFrame
-    """Merged DataFrame with timestamp, format, data, height, width columns"""
+    """DataFrame with timestamp, format, data columns for downward camera"""
     upward: pd.DataFrame
-    """Merged DataFrame with timestamp, format, data, height, width columns"""
+    """DataFrame with timestamp, format, data columns for upward camera"""
 
 
 class EpisodeData(typing.NamedTuple):

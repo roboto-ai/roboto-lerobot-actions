@@ -44,32 +44,6 @@ def load_and_parse_mcap(file: roboto.File) -> EpisodeData:
         joint_states_df, filter_joint_names=trajectory_joint_names
     )
 
-    logger.info("Extracting camera info topics")
-    downward_camera_info_topic = file.get_topic("/face_downward/zed/left/camera_info")
-    upward_camera_info_topic = file.get_topic("/face_upward/zed/left/camera_info")
-
-    if not downward_camera_info_topic or not upward_camera_info_topic:
-        raise ValueError("Camera info topics not found in MCAP file")
-
-    downward_camera_info_df = downward_camera_info_topic.get_data_as_df(
-        message_paths_include=[
-            "header",
-            "height",
-            "width",
-        ]
-    )
-
-    upward_camera_info_df = upward_camera_info_topic.get_data_as_df(
-        message_paths_include=[
-            "header",
-            "height",
-            "width",
-        ]
-    )
-
-    logger.info("Loaded %d downward camera info messages", len(downward_camera_info_df))
-    logger.info("Loaded %d upward camera info messages", len(upward_camera_info_df))
-
     logger.info("Extracting camera image topics")
     downward_camera_topic = file.get_topic(
         "/face_downward/zed/left/image_rect_color/compressed"
@@ -103,8 +77,6 @@ def load_and_parse_mcap(file: roboto.File) -> EpisodeData:
     camera_data = build_camera_data_index(
         downward_camera_df,
         upward_camera_df,
-        downward_camera_info_df,
-        upward_camera_info_df,
     )
 
     return EpisodeData(
