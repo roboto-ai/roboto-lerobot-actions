@@ -9,7 +9,6 @@ from .lerobot_dataset import (
     load_from_directory,
 )
 from .logger import logger
-from .roboto_dataset import create_roboto_dataset
 
 
 def calculate_action_observation_difference(dataset):
@@ -62,27 +61,10 @@ def main(context: roboto.InvocationContext) -> None:
         "action_observation_difference": (action_obs_diff_values, feature_info)
     }
     repo_id = f"{source_lerobot_ds.repo_id}_enriched"
-    enriched_lerobot_ds = add_features(
+    add_features(
         dataset=source_lerobot_ds,
         features=features,
         output_dir=str(context.output_dir / repo_id),
         repo_id=repo_id,
     )
-
     logger.info("Finished creating enriched LeRobot dataset.")
-
-    if context.is_dry_run:
-        logger.info("DRY_RUN: skipping upload to Roboto.")
-        return
-
-    roboto_ds = create_roboto_dataset(
-        derived_from=context.dataset_id, org_id=context.org_id
-    )
-
-    logger.info("Uploading enriched dataset to Roboto: %s", roboto_ds.dataset_id)
-    roboto_ds.upload_directory(context.output_dir / enriched_lerobot_ds.repo_id)
-
-    logger.info(
-        "Upload of enriched LeRobot dataset to Roboto datasets %s complete",
-        roboto_ds.dataset_id,
-    )
