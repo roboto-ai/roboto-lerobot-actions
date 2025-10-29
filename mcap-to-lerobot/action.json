@@ -10,7 +10,8 @@
         {
             "name": "alignment_topic",
             "description": "ROS topic to use as the base timeline for frame alignment. Valid options: '/joint_states', '/arm_controller/joint_trajectory', '/face_downward/zed/left/image_rect_color/compressed', '/face_upward/zed/left/image_rect_color/compressed'. All other signals will be backward-merged onto this base timeline.",
-            "required": false
+            "required": false,
+            "default": "/face_downward/zed/left/image_rect_color/compressed"
         }
     ],
     "requires_downloaded_inputs": false
