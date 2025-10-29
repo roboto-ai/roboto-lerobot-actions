@@ -7,9 +7,7 @@ from .types import (
     JointStates,
     Trajectories,
     CameraData,
-    CameraInfoData,
-    CameraInfoDimensions,
-    TrajectoryPoint,
+    ImageMeta,
 )
 
 NANO_SEC_PER_SEC = 1_000_000_000
@@ -34,7 +32,6 @@ def extract_joint_states(
 ) -> JointStates:
     """
     Parse joint states DataFrame to extract timestamps, joint names, and positions.
-    Calculates sampling frequency from median time difference.
     Validates joint name consistency across messages.
 
     Args:
@@ -44,7 +41,6 @@ def extract_joint_states(
 
     Returns:
         ParsedJointStates containing:
-        - fps: Calculated sampling frequency (capped at 240 for video encoder compatibility)
         - joint_names: List of joint names (filtered and ordered if filter_joint_names provided)
         - dataframe: DataFrame with timestamp and joint_positions columns, sorted by timestamp
     """
@@ -94,74 +90,98 @@ def extract_joint_states(
     else:
         output_joint_names = list(first_joint_names)
 
-    parsed_df = pd.DataFrame(
-        {"timestamp": timestamps, "joint_positions": positions_list}
+    parsed_df = (
+        pd.DataFrame({"timestamp": timestamps, "joint_positions": positions_list})
+        .sort_values("timestamp")
+        .reset_index(drop=True)
     )
 
-    parsed_df = parsed_df.sort_values("timestamp").reset_index(drop=True)
+    return JointStates(joint_names=output_joint_names, data=parsed_df)
 
-    time_diffs = np.diff(parsed_df["timestamp"].values)
-    median_time_diff_ns = np.median(time_diffs)
-    calculated_fps = round(NANO_SEC_PER_SEC / median_time_diff_ns)
 
-    # Cap FPS at 240 to comply with SVT-AV1 encoder maximum
-    MAX_FPS = 240
-    if calculated_fps > MAX_FPS:
-        logger.warning(
-            "Calculated FPS (%d) exceeds maximum supported by video encoder (%d). Capping at %d fps.",
-            calculated_fps,
-            MAX_FPS,
-            MAX_FPS,
-        )
-        fps = MAX_FPS
-    else:
-        fps = calculated_fps
+def keep_monotonic_timestamps(df: pd.DataFrame):
+    """
+    Keep only rows where timestamps are monotonically increasing.
+    When a timestamp decreases, pop previous rows until finding one less than the current value.
 
-    return JointStates(fps=fps, joint_names=output_joint_names, data=parsed_df)
+    Args:
+        df: DataFrame with a 'timestamp' column
+
+    Returns:
+        DataFrame with only monotonically increasing timestamps
+    """
+    keep = []
+    current_max = float("-inf")
+
+    for i, t in enumerate(df["timestamp"]):
+        if t >= current_max:
+            # still (or newly) monotonic
+            keep.append(i)
+            current_max = t
+        else:
+            # rewind: pop indices until t > previous element
+            while keep and df["timestamp"].iloc[keep[-1]] > t:
+                keep.pop()
+            keep.append(i)
+            current_max = t
+
+    return df.iloc[keep].reset_index(drop=True)
 
 
 def extract_trajectories(trajectory_df: pd.DataFrame) -> Trajectories:
     """
-    Parse trajectory DataFrame to extract timestamps, trajectory points, and joint names.
+    Parse trajectory DataFrame to extract flattened trajectory points with absolute timestamps.
+
+    Each trajectory message contains multiple points with relative time_from_start.
+    This function flattens all points into individual rows with absolute timestamps.
+
+    Returns:
+        Trajectories with data DataFrame containing:
+        - timestamp: absolute timestamp (int64 nanoseconds since Unix epoch)
+        - trajectory_positions: joint positions array (np.ndarray of float32)
     """
     timestamps = []
-    points_list = []
+    positions_list = []
     joint_names_list = []
 
     for _, row in trajectory_df.iterrows():
-        timestamp_ns = ros_time_to_nanoseconds(
+        trajectory_timestamp_ns = ros_time_to_nanoseconds(
             row["header.stamp.sec"], row["header.stamp.nsec"]
         )
-        timestamps.append(timestamp_ns)
 
         if not joint_names_list:
             joint_names_list = row["joint_names"]
 
-        parsed_points = []
+        # Flatten trajectory points into individual rows with absolute timestamps
         for point in row["points"]:
             positions = np.array(point["positions"], dtype=np.float32)
             time_from_start = point["time_from_start"]
             time_from_start_ns = ros_time_to_nanoseconds(
                 time_from_start["sec"], time_from_start["nsec"]
             )
-            parsed_points.append(
-                TrajectoryPoint(
-                    positions=positions, time_from_start_ns=time_from_start_ns
-                )
-            )
 
-        points_list.append(parsed_points)
-        if not parsed_points:
+            # Calculate absolute timestamp for this trajectory point
+            absolute_timestamp = trajectory_timestamp_ns + time_from_start_ns
+
+            timestamps.append(absolute_timestamp)
+            positions_list.append(positions)
+
+        if not row["points"]:
             logger.warning(
-                "Trajectory message at timestamp %d has no valid points.", timestamp_ns
+                "Trajectory message at timestamp %d has no valid points.",
+                trajectory_timestamp_ns,
             )
 
     if not joint_names_list:
         raise ValueError("No joint names found in trajectory messages")
 
-    parsed_df = pd.DataFrame({"timestamp": timestamps, "points": points_list})
-    parsed_df = parsed_df.sort_values("timestamp").reset_index(drop=True)
-    logger.info("Parsed %d trajectory messages with valid points", len(parsed_df))
+    parsed_df = pd.DataFrame(
+        {"timestamp": timestamps, "trajectory_positions": positions_list}
+    )
+    parsed_df = keep_monotonic_timestamps(parsed_df)
+    logger.info(
+        "Parsed %d flattened trajectory points from trajectory messages", len(parsed_df)
+    )
 
     return Trajectories(
         data=parsed_df,
@@ -172,9 +192,12 @@ def extract_trajectories(trajectory_df: pd.DataFrame) -> Trajectories:
 def build_camera_data_index(
     downward_camera_df: pd.DataFrame,
     upward_camera_df: pd.DataFrame,
-) -> CameraData:
+) -> tuple[CameraData, CameraData]:
     """
     Build camera data index and detect image dimensions from first image of each camera.
+
+    Returns:
+        Tuple of (camera_down, camera_up) CameraData objects
     """
     logger.info("Building camera data index")
 
@@ -225,28 +248,47 @@ def build_camera_data_index(
     logger.info("Detecting image dimensions from first frame of each camera")
 
     first_downward = downward_df.iloc[0]
-    downward_height, downward_width = get_image_dimensions(
+    downward_height, downward_width, downward_channels = get_image_dimensions(
         first_downward["data"], first_downward["format"]
     )
-    logger.info("Downward camera dimensions: %dx%d", downward_height, downward_width)
+    logger.info(
+        "Downward camera dimensions: %dx%dx%d",
+        downward_height,
+        downward_width,
+        downward_channels,
+    )
 
     first_upward = upward_df.iloc[0]
-    upward_height, upward_width = get_image_dimensions(
+    upward_height, upward_width, upward_channels = get_image_dimensions(
         first_upward["data"], first_upward["format"]
     )
-    logger.info("Upward camera dimensions: %dx%d", upward_height, upward_width)
-
-    return CameraData(
-        camera_info=CameraInfoData(
-            downward=CameraInfoDimensions(height=downward_height, width=downward_width),
-            upward=CameraInfoDimensions(height=upward_height, width=upward_width),
-        ),
-        downward=downward_df,
-        upward=upward_df,
+    logger.info(
+        "Upward camera dimensions: %dx%dx%d",
+        upward_height,
+        upward_width,
+        upward_channels,
     )
 
+    camera_down = CameraData(
+        meta=ImageMeta(
+            height=downward_height, width=downward_width, channels=downward_channels
+        ),
+        data=downward_df,
+    )
 
-def get_image_dimensions(compressed_data: bytes, format_str: str) -> tuple[int, int]:
+    camera_up = CameraData(
+        meta=ImageMeta(
+            height=upward_height, width=upward_width, channels=upward_channels
+        ),
+        data=upward_df,
+    )
+
+    return camera_down, camera_up
+
+
+def get_image_dimensions(
+    compressed_data: bytes, format_str: str
+) -> tuple[int, int, int]:
     """
     Get image dimensions without full decompression.
 
@@ -255,7 +297,7 @@ def get_image_dimensions(compressed_data: bytes, format_str: str) -> tuple[int, 
         format_str: Format string from CompressedImage message (e.g., "jpeg", "png")
 
     Returns:
-        Tuple of (height, width) in pixels
+        Tuple of (height, width, channels) in pixels
     """
     img_array = np.frombuffer(compressed_data, dtype=np.uint8)
     img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
@@ -263,8 +305,7 @@ def get_image_dimensions(compressed_data: bytes, format_str: str) -> tuple[int, 
     if img is None:
         raise ValueError("Failed to decode image with format: %s" % format_str)
 
-    height, width = img.shape[:2]
-    return (height, width)
+    return img.shape
 
 
 def decompress_image(compressed_data: bytes, format_str: str) -> np.ndarray:
@@ -287,37 +328,3 @@ def decompress_image(compressed_data: bytes, format_str: str) -> np.ndarray:
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     return img_rgb
-
-
-def get_trajectory_action_at_time(
-    observation_timestamp: int,
-    trajectory_timestamp: int,
-    trajectory_points: list[TrajectoryPoint],
-) -> np.ndarray:
-    """
-    Get action from trajectory points based on elapsed time.
-
-    Args:
-        observation_timestamp: Current observation timestamp (int64 nanoseconds)
-        trajectory_timestamp: Trajectory start timestamp (int64 nanoseconds)
-        trajectory_points: List of TrajectoryPoint with positions and time_from_start_ns
-
-    Returns:
-        numpy array of target joint positions (float32)
-    """
-    elapsed_time_ns = observation_timestamp - trajectory_timestamp
-
-    # Handle edge cases
-    if elapsed_time_ns < trajectory_points[0].time_from_start_ns:
-        return trajectory_points[0].positions
-
-    if elapsed_time_ns >= trajectory_points[-1].time_from_start_ns:
-        return trajectory_points[-1].positions
-
-    # Find the appropriate trajectory point (no interpolation between points)
-    for i in range(len(trajectory_points) - 1, -1, -1):
-        if trajectory_points[i].time_from_start_ns <= elapsed_time_ns:
-            return trajectory_points[i].positions
-
-    # Fallback (should not reach here)
-    return trajectory_points[0].positions

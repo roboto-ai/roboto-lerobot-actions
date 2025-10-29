@@ -4,140 +4,135 @@ import cv2
 import pandas as pd
 
 from .logger import logger
-from .extract import decompress_image, get_trajectory_action_at_time
-from .types import EpisodeData, Frame, TrajectoryPoint
+from .extract import decompress_image
+from .mcap import McapTopic
+from .types import EpisodeData, Frame
 
 
 def generate_frames(
     episode_data: EpisodeData,
+    alignment_topic: str,
 ) -> Generator[Frame, None, None]:
     """
-    Generate observation-action pairs at joint state frequency.
+    Generate observation-action pairs based on alignment_topic frequency.
 
-    Synchronizes joint states with trajectories (backward lookup) and camera images (backward lookup).
+    Synchronizes all signals using backward lookup based on the configured alignment_topic.
+
+    Args:
+        episode_data: Episode data containing all signals
+        alignment_topic: ROS topic to use as base timeline for frame alignment
     """
     logger.info("Generating frames from episode data")
 
-    joint_states_df = episode_data.joint_states_df
-    trajectories_df = episode_data.trajectories_df
-    camera_data = episode_data.camera_data
-
-    logger.info("Merging in trajectory data")
-    # Rename trajectory timestamp to avoid collision with joint state timestamp
-    trajectories_df_renamed = trajectories_df.rename(
-        columns={"timestamp": "timestamp_traj"}
+    # Prepare signal dataframes with appropriate column names
+    joint_states_df = episode_data.state.rename(
+        columns={"joint_positions": "observation_state"}
+    )
+    trajectories_df = episode_data.action.rename(
+        columns={"trajectory_positions": "action"}
+    )
+    camera_down_df = episode_data.camera_down.data[
+        ["timestamp", "format", "data"]
+    ].rename(columns={"format": "format_down", "data": "camera_down"})
+    camera_up_df = episode_data.camera_up.data[["timestamp", "format", "data"]].rename(
+        columns={"format": "format_up", "data": "camera_up"}
     )
 
-    merged_df = pd.merge_asof(
-        joint_states_df.sort_values("timestamp"),
-        trajectories_df_renamed.sort_values("timestamp_traj"),
-        left_on="timestamp",
-        right_on="timestamp_traj",
-        direction="backward",
+    # Create signal mapping
+    signal_map = {
+        McapTopic.ObservationStates.value: joint_states_df,
+        McapTopic.Action.value: trajectories_df,
+        McapTopic.ObservationCameraDown.value: camera_down_df,
+        McapTopic.ObservationCameraUp.value: camera_up_df,
+    }
+
+    # Get base dataframe based on alignment_topic
+    base_df = (
+        signal_map[alignment_topic].sort_values("timestamp").reset_index(drop=True)
     )
 
-    logger.info("Merged %d joint states with trajectories", len(merged_df))
+    # Merge all other signals onto base_df
+    merged_df = base_df
+    for topic, signal_df in signal_map.items():
+        if topic == alignment_topic:
+            continue  # Skip the base signal
 
-    logger.info("Merging in camera frames")
-    downward_camera_df = camera_data.downward.sort_values("timestamp")
-    upward_camera_df = camera_data.upward.sort_values("timestamp")
+        logger.info("Merging %s onto base timeline", topic)
+        merged_df = pd.merge_asof(
+            merged_df,
+            signal_df.sort_values("timestamp"),
+            on="timestamp",
+            direction="backward",
+        )
 
-    # Rename columns before merge to avoid suffix confusion
-    downward_camera_df_renamed = downward_camera_df[["timestamp", "format", "data"]].rename(
-        columns={"format": "format_downward", "data": "data_downward"}
+    # Drop rows with any NaN values
+    rows_before = len(merged_df)
+    merged_df = merged_df.dropna()
+    rows_after = len(merged_df)
+    rows_dropped = rows_before - rows_after
+
+    logger.info(
+        "Dropped %d rows with NaN values, retained %d rows",
+        rows_dropped,
+        rows_after,
     )
-    upward_camera_df_renamed = upward_camera_df[["timestamp", "format", "data"]].rename(
-        columns={"format": "format_upward", "data": "data_upward"}
-    )
-
-    merged_df = pd.merge_asof(
-        merged_df,
-        downward_camera_df_renamed,
-        on="timestamp",
-        direction="backward",
-    )
-
-    merged_df = pd.merge_asof(
-        merged_df,
-        upward_camera_df_renamed,
-        on="timestamp",
-        direction="backward",
-    )
-
-    logger.info("Merged camera data, total frames: %d", len(merged_df))
 
     frame_count = 0
     for _, row in merged_df.iterrows():
-        obs_timestamp = row["timestamp"]
-        joint_positions = row["joint_positions"]
-        traj_timestamp = row["timestamp_traj"]
-        traj_points: list[TrajectoryPoint] = row["points"]
+        observation_state = row["observation_state"]
+        action = row["action"]
+        image_down = decompress_image(row["camera_down"], row["format_down"])
+        image_up = decompress_image(row["camera_up"], row["format_up"])
 
-        if len(traj_points) > 0:
-            action = get_trajectory_action_at_time(
-                obs_timestamp, traj_timestamp, traj_points
-            )
-        else:
-            # No trajectory available, skip
-            continue
+        # Resize images to match expected dimensions from camera metadata
+        expected_downward_height = episode_data.camera_down.meta.height
+        expected_downward_width = episode_data.camera_down.meta.width
+        expected_upward_height = episode_data.camera_up.meta.height
+        expected_upward_width = episode_data.camera_up.meta.width
 
-        # Check if camera data is available (not NaN from merge_asof)
-        if pd.isna(row["data_downward"]) or pd.isna(row["data_upward"]):
-            logger.debug("Skipping frame at timestamp %d: missing camera data", obs_timestamp)
-            continue
-
-        downward_image = decompress_image(row["data_downward"], row["format_downward"])
-        upward_image = decompress_image(row["data_upward"], row["format_upward"])
-
-        # Resize images to match expected dimensions from camera_info
-        expected_downward_height = camera_data.camera_info.downward.height
-        expected_downward_width = camera_data.camera_info.downward.width
-        expected_upward_height = camera_data.camera_info.upward.height
-        expected_upward_width = camera_data.camera_info.upward.width
-
-        if downward_image.shape[:2] != (
+        if image_down.shape[:2] != (
             expected_downward_height,
             expected_downward_width,
         ):
             logger.debug(
                 "Resizing downward image from %s to (%d, %d, 3)",
-                downward_image.shape,
+                image_down.shape,
                 expected_downward_height,
                 expected_downward_width,
             )
-            downward_image = cv2.resize(
-                downward_image,
+            image_down = cv2.resize(
+                image_down,
                 (expected_downward_width, expected_downward_height),
                 interpolation=cv2.INTER_LINEAR,
             )
 
-        if upward_image.shape[:2] != (expected_upward_height, expected_upward_width):
+        if image_up.shape[:2] != (expected_upward_height, expected_upward_width):
             logger.debug(
                 "Resizing upward image from %s to (%d, %d, 3)",
-                upward_image.shape,
+                image_up.shape,
                 expected_upward_height,
                 expected_upward_width,
             )
-            upward_image = cv2.resize(
-                upward_image,
+            image_up = cv2.resize(
+                image_up,
                 (expected_upward_width, expected_upward_height),
                 interpolation=cv2.INTER_LINEAR,
             )
 
         # Ensure action has the same shape as joint_positions
-        if action.shape != joint_positions.shape:
+        if action.shape != observation_state.shape:
             logger.warning(
                 "Action shape %s does not match joint_positions shape %s. Skipping frame.",
                 action.shape,
-                joint_positions.shape,
+                observation_state.shape,
             )
             continue
 
         frame = Frame(
-            observation_state=joint_positions,
+            observation_state=observation_state,
             action=action,
-            observation_images_downward=downward_image,
-            observation_images_upward=upward_image,
+            observation_images_downward=image_down,
+            observation_images_upward=image_up,
             task="dual_arm_manipulation",
         )
 

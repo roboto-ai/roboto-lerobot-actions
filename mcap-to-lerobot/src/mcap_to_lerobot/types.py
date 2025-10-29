@@ -10,8 +10,6 @@ if typing.TYPE_CHECKING:
 class JointStates(typing.NamedTuple):
     """Parsed joint states data."""
 
-    fps: int
-    """Calculated sampling frequency"""
     joint_names: list[str]
     """List of joint names (filtered and ordered if filter_joint_names provided)"""
     data: pd.DataFrame
@@ -19,58 +17,37 @@ class JointStates(typing.NamedTuple):
 
 
 class Trajectories(typing.NamedTuple):
-    """Parsed trajectory data."""
+    """Parsed trajectory data with flattened trajectory points."""
 
     joint_names: list[str]
     """List of joint names from the trajectory"""
     data: pd.DataFrame
-    """DataFrame with timestamp and points columns"""
+    """DataFrame with timestamp and trajectory_positions columns.
+    Each row represents a single trajectory point with absolute timestamp."""
 
 
-class CameraInfoDimensions(typing.NamedTuple):
-    """Camera dimensions detected from image data."""
-
+class ImageMeta(typing.NamedTuple):
     height: int
-    """Image height in pixels"""
     width: int
-    """Image width in pixels"""
-
-
-class CameraInfoData(typing.NamedTuple):
-    """Camera dimensions for both cameras."""
-
-    downward: CameraInfoDimensions
-    """Dimensions for downward-facing camera"""
-    upward: CameraInfoDimensions
-    """Dimensions for upward-facing camera"""
+    channels: int
 
 
 class CameraData(typing.NamedTuple):
-    """Camera data index with image data and detected dimensions."""
+    """Camera data with metadata and image data for a single camera."""
 
-    camera_info: CameraInfoData
-    """Camera dimensions for both cameras (detected from first image)"""
-    downward: pd.DataFrame
-    """DataFrame with timestamp, format, data columns for downward camera"""
-    upward: pd.DataFrame
-    """DataFrame with timestamp, format, data columns for upward camera"""
+    meta: ImageMeta
+    data: pd.DataFrame
+    """DataFrame with timestamp, format, data columns for camera images"""
 
 
 class EpisodeData(typing.NamedTuple):
     """Complete episode data from MCAP file."""
 
-    fps: int
-    """Calculated sampling frequency from joint states"""
+    action: pd.DataFrame
+    state: pd.DataFrame
+    camera_down: CameraData
+    camera_up: CameraData
     joint_names: list[str]
-    """List of joint names (filtered to match trajectory joints)"""
-    camera_info: CameraInfoData
-    """Camera dimensions for both cameras"""
-    joint_states_df: pd.DataFrame
-    """DataFrame with timestamp and joint_positions columns"""
-    trajectories_df: pd.DataFrame
-    """DataFrame with timestamp and trajectory points"""
-    camera_data: CameraData
-    """Camera data index with merged DataFrames"""
 
 
 class Frame(typing.NamedTuple):
@@ -81,17 +58,8 @@ class Frame(typing.NamedTuple):
     action: np.ndarray
     """Target joint positions from trajectory"""
     observation_images_downward: np.ndarray
-    """Downward-facing camera image (H, W, 3) RGB"""
+    """Downward-facing camera image (H, W, C)"""
     observation_images_upward: np.ndarray
-    """Upward-facing camera image (H, W, 3) RGB"""
+    """Upward-facing camera image (H, W, C)"""
     task: str
     """Task identifier (constant "dual_arm_manipulation")"""
-
-
-class TrajectoryPoint(typing.NamedTuple):
-    """Single point in a trajectory."""
-
-    positions: np.ndarray
-    """Joint positions at this trajectory point"""
-    time_from_start_ns: int
-    """Time from trajectory start in nanoseconds"""
