@@ -23,8 +23,6 @@ RUN apt-get update && \
 # -- INSTALL THIRD-PARTY PYTHON LIBRARIES --
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
 COPY pyproject.toml ./
-# TODO
-COPY roboto-0.30.1.dev7+ge0dfa36a7.d20251027-py3-none-any.whl /home/roboto/Documents/repos/roboto-lerobot-actions/mcap-to-lerobot/roboto-0.30.1.dev7+ge0dfa36a7.d20251027-py3-none-any.whl
 RUN uv pip install --system -r pyproject.toml && rm -rf /bin/uv
 
 COPY src/mcap_to_lerobot/ ./mcap_to_lerobot
