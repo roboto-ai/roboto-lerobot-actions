@@ -50,7 +50,7 @@ def extract_joint_states(
 
     for _, row in joint_states_df.iterrows():
         timestamp_ns = ros_time_to_nanoseconds(
-            row["header.stamp.sec"], row["header.stamp.nsec"]
+            row["header.stamp.sec"], row["header.stamp.nanosec"]
         )
         timestamps.append(timestamp_ns)
 
@@ -146,7 +146,7 @@ def extract_trajectories(trajectory_df: pd.DataFrame) -> Trajectories:
 
     for _, row in trajectory_df.iterrows():
         trajectory_timestamp_ns = ros_time_to_nanoseconds(
-            row["header.stamp.sec"], row["header.stamp.nsec"]
+            row["header.stamp.sec"], row["header.stamp.nanosec"]
         )
 
         if not joint_names_list:
@@ -157,7 +157,7 @@ def extract_trajectories(trajectory_df: pd.DataFrame) -> Trajectories:
             positions = np.array(point["positions"], dtype=np.float32)
             time_from_start = point["time_from_start"]
             time_from_start_ns = ros_time_to_nanoseconds(
-                time_from_start["sec"], time_from_start["nsec"]
+                time_from_start["sec"], time_from_start["nanosec"]
             )
 
             # Calculate absolute timestamp for this trajectory point
@@ -207,7 +207,7 @@ def build_camera_data_index(
 
     for _, row in downward_camera_df.iterrows():
         timestamp_ns = ros_time_to_nanoseconds(
-            row["header.stamp.sec"], row["header.stamp.nsec"]
+            row["header.stamp.sec"], row["header.stamp.nanosec"]
         )
         downward_timestamps.append(timestamp_ns)
         downward_data.append(
@@ -226,7 +226,7 @@ def build_camera_data_index(
 
     for _, row in upward_camera_df.iterrows():
         timestamp_ns = ros_time_to_nanoseconds(
-            row["header.stamp.sec"], row["header.stamp.nsec"]
+            row["header.stamp.sec"], row["header.stamp.nanosec"]
         )
         upward_timestamps.append(timestamp_ns)
         upward_data.append(
