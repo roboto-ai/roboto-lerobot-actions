@@ -8,6 +8,17 @@ LeRobot is an open-source framework for robotics machine learning that defines i
 
 ## Actions
 
+### Convert MCAP Files to LeRobot Dataset
+
+**An example Roboto Action** that demonstrates how to convert MCAP files stored in Roboto into LeRobot dataset format. This example shows how to:
+- Load and parse MCAP files from Roboto storage
+- Extract and synchronize multiple topics (joint states, trajectories, camera images)
+- Generate LeRobot-compatible datasets with proper metadata and structure
+
+In this specific example, the action processes MCAP files where each file represents one episode of dual-arm robot manipulation. It extracts action trajectories, observation states, and dual camera feeds, then aligns them temporally based on a configurable topic frequency. The resulting LeRobot dataset includes synchronized observation-action pairs with video data, ready for model training.
+
+See the [action-specific README](./mcap-to-lerobot/README.md) for detailed setup and usage instructions.
+
 ### Enrich LeRobot Dataset With Derived Data
 
 **An example Roboto Action** that demonstrates one approach to adding features to LeRobot datasets stored in Roboto. This example shows how to:
