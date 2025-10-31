@@ -1,9 +1,6 @@
 # mcap-to-lerobot
 
-Convert MCAP file(s) to a LeRobot Dataset
-
-
-> **Note**: This README was generated from a template. Please customize it to describe what this specific action does: its inputs, outputs, parameters, and/or usage instructions.
+Convert MCAP file(s) stored in the Roboto Data Platform to a LeRobot Dataset.
 
 ## Table of Contents
 

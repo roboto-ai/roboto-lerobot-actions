@@ -4,12 +4,21 @@ ARG OS_VARIANT=slim-bookworm
 FROM public.ecr.aws/docker/library/python:${PYTHON_MAJOR}.${PYTHON_MINOR}-${OS_VARIANT}
 
 # -- INSTALL SYSTEM DEPENDENCIES --
-# Uncomment the following RUN instruction and add the package name(s) to the apt-get install command.
-# RUN apt-get update && \
-#     apt-get install -y --no-install-recommends \
-#       <PKG_NAME_1> \
-#       <PKG_NAME_2> && \
-#     rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        cmake \
+        build-essential \
+        pkg-config \
+        linux-headers-generic \
+        ffmpeg \
+        libavformat-dev \
+        libavcodec-dev \
+        libavdevice-dev \
+        libavutil-dev \
+        libswscale-dev \
+        libswresample-dev \
+        libavfilter-dev && \
+    rm -rf /var/lib/apt/lists/*
 
 # -- INSTALL THIRD-PARTY PYTHON LIBRARIES --
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/

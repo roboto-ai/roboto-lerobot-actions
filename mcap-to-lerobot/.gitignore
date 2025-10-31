@@ -12,6 +12,7 @@
 
 # Packaging
 *.egg-info
+*.whl
 dist/
 
 # Editor

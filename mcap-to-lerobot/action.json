@@ -2,9 +2,17 @@
     "name": "mcap-to-lerobot",
     "description": "Convert MCAP file(s) to a LeRobot Dataset",
     "compute_requirements": {
-        "vCPU": 512,
-        "memory": 1024,
-        "storage": 21
+        "vCPU": 16384,
+        "memory": 32768,
+        "storage": 200
     },
-    "parameters": []
+    "parameters": [
+        {
+            "name": "alignment_topic",
+            "description": "ROS topic to use as the base timeline for frame alignment. Valid options: '/joint_states', '/arm_controller/joint_trajectory', '/face_downward/zed/left/image_rect_color/compressed', '/face_upward/zed/left/image_rect_color/compressed'. All other signals will be backward-merged onto this base timeline.",
+            "required": false,
+            "default": "/face_downward/zed/left/image_rect_color/compressed"
+        }
+    ],
+    "requires_downloaded_inputs": false
 }
